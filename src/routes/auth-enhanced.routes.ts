@@ -46,7 +46,8 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      res.status(400).json({ success: false, errors: errors.array() });
+      return;
     }
 
     const ipAddress = getClientIp(req);
@@ -55,12 +56,14 @@ router.post(
     try {
       const { email, password } = req.body;
       const result = await AuthController.login(email, password, ipAddress, userAgent);
-      return res.status(200).json(result);
+      res.status(200).json(result);
+      return;
     } catch (error: any) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         message: error.message || 'Login failed',
       });
+      return;
     }
   }
 );
@@ -73,7 +76,8 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      res.status(400).json({ success: false, errors: errors.array() });
+      return;
     }
 
     try {
@@ -83,10 +87,11 @@ router.post(
       const verifyResult = await TwoFactorAuthService.verifyToken(userId, token);
 
       if (!verifyResult.success) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           message: verifyResult.message,
         });
+        return;
       }
 
       const result = await AuthController.completeTwoFactorLogin(
@@ -95,12 +100,14 @@ router.post(
         getUserAgent(req)
       );
 
-      return res.status(200).json(result);
+      res.status(200).json(result);
+      return;
     } catch (error: any) {
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: error.message || 'Failed to verify 2FA',
       });
+      return;
     }
   }
 );
@@ -118,10 +125,11 @@ router.post(
       const verifyResult = await TwoFactorAuthService.verifyBackupCode(userId, backupCode);
 
       if (!verifyResult.success) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           message: verifyResult.message,
         });
+        return;
       }
 
       const result = await AuthController.completeTwoFactorLogin(
@@ -130,12 +138,14 @@ router.post(
         getUserAgent(req)
       );
 
-      return res.status(200).json(result);
+      res.status(200).json(result);
+      return;
     } catch (error: any) {
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: error.message || 'Failed to verify backup code',
       });
+      return;
     }
   }
 );
@@ -149,16 +159,18 @@ router.post(
       const userId = (req as any).user.id;
       const twoFactorSecret = await AuthController.setupTwoFactor(userId);
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: '2FA setup initiated',
         data: twoFactorSecret,
       });
+      return;
     } catch (error: any) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: error.message || 'Failed to setup 2FA',
       });
+      return;
     }
   }
 );
@@ -171,7 +183,8 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      res.status(400).json({ success: false, errors: errors.array() });
+      return;
     }
 
     try {
@@ -188,23 +201,26 @@ router.post(
       });
 
       if (!verified) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: 'Invalid 2FA token',
         });
+        return;
       }
 
       await AuthController.enableTwoFactor(userId, secret, getClientIp(req), getUserAgent(req));
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: '2FA enabled successfully',
       });
+      return;
     } catch (error: any) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: error.message || 'Failed to confirm 2FA',
       });
+      return;
     }
   }
 );
@@ -221,15 +237,17 @@ router.post(
 
       await AuthController.disableTwoFactor(userId, password, getClientIp(req), getUserAgent(req));
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: '2FA disabled successfully',
       });
+      return;
     } catch (error: any) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: error.message || 'Failed to disable 2FA',
       });
+      return;
     }
   }
 );
@@ -257,7 +275,8 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      res.status(400).json({ success: false, errors: errors.array() });
+      return;
     }
 
     try {
@@ -266,15 +285,17 @@ router.post(
 
       await AuthController.changePassword(userId, currentPassword, newPassword, getClientIp(req), getUserAgent(req));
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         message: 'Password changed successfully',
       });
+      return;
     } catch (error: any) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: error.message || 'Failed to change password',
       });
+      return;
     }
   }
 );
@@ -288,15 +309,17 @@ router.get(
       const userId = (req as any).user.id;
       const history = await AuthController.getLoginHistory(userId);
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         data: history,
       });
+      return;
     } catch (error: any) {
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: error.message || 'Failed to fetch login history',
       });
+      return;
     }
   }
 );

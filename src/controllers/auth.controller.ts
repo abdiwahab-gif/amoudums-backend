@@ -1,13 +1,16 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { AuthService } from '@/services/auth.service';
 import { SecurityAuditService } from '@/services/security-audit.service';
 import { validationResult } from 'express-validator';
+import { config } from '@/config';
 
 export class AuthController {
-  static async register(req: Request, res: Response) {
+  static async register(req: Request, res: Response): Promise<void> {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      res.status(400).json({ success: false, errors: errors.array() });
+      return;
     }
 
     try {
@@ -30,11 +33,13 @@ export class AuthController {
         message: 'User registered successfully',
         data: user,
       });
+      return;
     } catch (error: any) {
       res.status(400).json({
         success: false,
         message: error.message || 'Registration failed',
       });
+      return;
     }
   }
 
@@ -74,18 +79,16 @@ export class AuthController {
     if (!user) throw new Error('User not found');
 
     // Create permanent token
-    const jwt = require('jsonwebtoken');
-    const { config } = require('@/config');
-
     const payload = {
       id: user.id,
       email: user.email,
       role: user.role,
     };
 
-    const token = jwt.sign(payload, config.jwt.secret, {
+    const signOptions: any = {
       expiresIn: config.jwt.expiry,
-    });
+    };
+    const token = jwt.sign(payload, config.jwt.secret, signOptions);
 
     // Log successful 2FA verification
     await SecurityAuditService.logAuditEvent(
@@ -141,16 +144,18 @@ export class AuthController {
     return await SecurityAuditService.getLoginHistory(userId, 20);
   }
 
-  static async getProfile(req: Request, res: Response) {
+  static async getProfile(req: Request, res: Response): Promise<void> {
     try {
       if (!req.user?.id) {
-        return res.status(401).json({ success: false, message: 'Unauthorized' });
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
       }
 
       const user = await AuthService.getUserById(req.user.id);
 
       if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+        res.status(404).json({ success: false, message: 'User not found' });
+        return;
       }
 
       res.status(200).json({
@@ -158,18 +163,21 @@ export class AuthController {
         message: 'Profile retrieved',
         data: user,
       });
+      return;
     } catch (error: any) {
       res.status(500).json({
         success: false,
         message: error.message || 'Failed to retrieve profile',
       });
+      return;
     }
   }
 
-  static async updateProfile(req: Request, res: Response) {
+  static async updateProfile(req: Request, res: Response): Promise<void> {
     try {
       if (!req.user?.id) {
-        return res.status(401).json({ success: false, message: 'Unauthorized' });
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+        return;
       }
 
       const user = await AuthService.updateUser(req.user.id, req.body);
@@ -179,11 +187,13 @@ export class AuthController {
         message: 'Profile updated successfully',
         data: user,
       });
+      return;
     } catch (error: any) {
       res.status(400).json({
         success: false,
         message: error.message || 'Failed to update profile',
       });
+      return;
     }
   }
 }

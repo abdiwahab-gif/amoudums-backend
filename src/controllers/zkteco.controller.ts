@@ -137,7 +137,7 @@ function annotateCheckInOut(logs: AttendanceLogRow[]): AttendanceLogRow[] {
 }
 
 export class ZktecoController {
-  static async getRequest(req: Request, res: Response): Promise<void> {
+  static async getRequest(_req: Request, res: Response): Promise<void> {
     // Device polls this endpoint; always respond OK.
     res.status(200).type('text/plain').send('OK');
   }

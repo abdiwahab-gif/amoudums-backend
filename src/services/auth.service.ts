@@ -175,7 +175,7 @@ export class AuthService {
    */
   static async completeTwoFactorLogin(
     userId: string,
-    token: string,
+    _token: string,
     ipAddress: string,
     userAgent: string
   ): Promise<{ user: User; token: string }> {

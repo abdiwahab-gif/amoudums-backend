@@ -1,7 +1,8 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { body } from 'express-validator';
 import { AuthController } from '@/controllers/auth.controller';
 import { authenticateToken } from '@/middleware/auth';
+import { validationResult } from 'express-validator';
 
 const router = Router();
 
@@ -25,7 +26,29 @@ router.post(
     body('email').isEmail().normalizeEmail(),
     body('password').notEmpty(),
   ],
-  AuthController.login
+  async (req: Request, res: Response): Promise<void> => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ success: false, errors: errors.array() });
+      return;
+    }
+
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+    const userAgent = req.headers['user-agent'] || '';
+
+    try {
+      const { email, password } = req.body;
+      const result = await AuthController.login(email, password, ipAddress, userAgent);
+      res.status(200).json(result);
+      return;
+    } catch (error: any) {
+      res.status(401).json({
+        success: false,
+        message: error.message || 'Login failed',
+      });
+      return;
+    }
+  }
 );
 
 // Get Profile

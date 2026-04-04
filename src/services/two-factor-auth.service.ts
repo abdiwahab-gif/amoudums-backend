@@ -5,7 +5,6 @@
 
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
-import { config } from '@/config';
 import { execute, query } from '@/database/connection';
 
 export interface TwoFactorSecret {

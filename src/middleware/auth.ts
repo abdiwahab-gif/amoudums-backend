@@ -16,7 +16,8 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Access token required' });
+    res.status(401).json({ success: false, message: 'Access token required' });
+    return;
   }
 
   try {
@@ -24,18 +25,21 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     req.user = decoded;
     next();
   } catch (error) {
-    return res.status(403).json({ success: false, message: 'Invalid or expired token' });
+    res.status(403).json({ success: false, message: 'Invalid or expired token' });
+    return;
   }
 }
 
 export function authorizeRole(...allowedRoles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
     }
 
     if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+      res.status(403).json({ success: false, message: 'Insufficient permissions' });
+      return;
     }
 
     next();
