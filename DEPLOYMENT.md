@@ -108,6 +108,13 @@ API_URL=https://api.yourdomain.com
 
 ## Step 4: Process Management with PM2
 
+## Database Migrations (Automatic)
+
+On every server start, the backend automatically runs idempotent database migrations (table creation + security enhancements) before it begins listening for requests.
+
+- Default: enabled
+- To disable (only if you run migrations separately): set `RUN_MIGRATIONS_ON_STARTUP=false` in your `.env`
+
 ### Start Application
 ```bash
 pm2 start dist/server.js --name "academic-api"

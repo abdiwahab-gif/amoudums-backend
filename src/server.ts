@@ -62,13 +62,23 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 // Start Server
 async function startServer() {
   try {
-    // Initialize database tables
-    console.log('Initializing database tables...');
-    await initializeTables();
+    const runMigrationsOnStartup =
+      String(process.env.RUN_MIGRATIONS_ON_STARTUP || 'true').toLowerCase() !==
+      'false';
 
-    // Apply security and compatibility migrations for auth/user flows
-    console.log('Applying security enhancements...');
-    await addSecurityEnhancements();
+    if (runMigrationsOnStartup) {
+      // Initialize database tables
+      console.log('Initializing database tables...');
+      await initializeTables();
+
+      // Apply security and compatibility migrations for auth/user flows
+      console.log('Applying security enhancements...');
+      await addSecurityEnhancements();
+
+      console.log('✓ Database migrations applied');
+    } else {
+      console.log('⚠ Skipping database migrations (RUN_MIGRATIONS_ON_STARTUP=false)');
+    }
 
     // Optional: seed initial admin user (only when env vars are set)
     try {
