@@ -33,6 +33,9 @@ function parseMysqlUrl(urlString: string | undefined): Partial<DbEnvConfig> | nu
 
 function getDbConfigFromEnv(): DbEnvConfig {
   const urlConfig =
+    // Railway provides both a public proxy URL and an internal service URL.
+    // External hosts like Render must use the public URL.
+    parseMysqlUrl(process.env.MYSQL_PUBLIC_URL) ??
     parseMysqlUrl(process.env.MYSQL_URL) ??
     parseMysqlUrl(process.env.DATABASE_URL) ??
     parseMysqlUrl(process.env.DATABASE_CONNECTION_STRING) ??
@@ -74,6 +77,7 @@ function getDbConfigFromEnv(): DbEnvConfig {
     host === 'localhost' &&
     !process.env.DB_HOST &&
     !process.env.MYSQLHOST &&
+    !process.env.MYSQL_PUBLIC_URL &&
     !process.env.MYSQL_URL &&
     !process.env.DATABASE_URL
   ) {
