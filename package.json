@@ -28,6 +28,8 @@
     "express-validator": "^7.0.0",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.6.5",
+    "speakeasy": "^2.0.0",
+    "qrcode": "^1.5.3",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
@@ -37,6 +39,7 @@
     "@types/jest": "^29.5.11",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.10.6",
+    "@types/speakeasy": "^2.0.10",
     "@typescript-eslint/eslint-plugin": "^6.17.0",
     "@typescript-eslint/parser": "^6.17.0",
     "eslint": "^8.56.0",

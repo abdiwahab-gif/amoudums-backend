@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthService } from '@/services/auth.service';
+import { SecurityAuditService } from '@/services/security-audit.service';
 import { validationResult } from 'express-validator';
 
 export class AuthController {
@@ -11,8 +12,18 @@ export class AuthController {
 
     try {
       const { email, password, firstName, lastName, role } = req.body;
+      const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+      const userAgent = req.headers['user-agent'] || '';
 
-      const user = await AuthService.registerUser(email, password, firstName, lastName, role);
+      const user = await AuthService.registerUser(
+        email,
+        password,
+        firstName,
+        lastName,
+        role,
+        ipAddress,
+        userAgent
+      );
 
       res.status(201).json({
         success: true,
@@ -27,28 +38,107 @@ export class AuthController {
     }
   }
 
-  static async login(req: Request, res: Response) {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
+  static async login(
+    email: string,
+    password: string,
+    ipAddress: string,
+    userAgent: string
+  ): Promise<any> {
+    const result = await AuthService.loginUser(email, password, ipAddress, userAgent);
 
-    try {
-      const { email, password } = req.body;
-
-      const { user, token } = await AuthService.loginUser(email, password);
-
-      res.status(200).json({
+    if (result.requiresTwoFactor) {
+      return {
         success: true,
-        message: 'Login successful',
-        data: { user, token },
-      });
-    } catch (error: any) {
-      res.status(401).json({
-        success: false,
-        message: error.message || 'Login failed',
-      });
+        message: 'Login successful. Please verify with 2FA.',
+        data: {
+          user: result.user,
+          requiresTwoFactor: true,
+          tempToken: result.tempToken,
+        },
+      };
     }
+
+    return {
+      success: true,
+      message: 'Login successful',
+      data: { user: result.user, token: result.token },
+    };
+  }
+
+  static async completeTwoFactorLogin(
+    userId: string,
+    ipAddress: string,
+    userAgent: string
+  ): Promise<any> {
+    const user = await AuthService.getUserById(userId);
+    if (!user) throw new Error('User not found');
+
+    // Create permanent token
+    const jwt = require('jsonwebtoken');
+    const { config } = require('@/config');
+
+    const payload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const token = jwt.sign(payload, config.jwt.secret, {
+      expiresIn: config.jwt.expiry,
+    });
+
+    // Log successful 2FA verification
+    await SecurityAuditService.logAuditEvent(
+      userId,
+      'TWO_FACTOR_VERIFIED',
+      'User',
+      userId,
+      null,
+      ipAddress,
+      userAgent
+    );
+
+    return {
+      success: true,
+      message: 'Authentication successful',
+      data: { user, token },
+    };
+  }
+
+  static async setupTwoFactor(userId: string): Promise<any> {
+    return await AuthService.setupTwoFactor(userId);
+  }
+
+  static async enableTwoFactor(
+    userId: string,
+    secret: string,
+    ipAddress: string,
+    userAgent: string
+  ): Promise<void> {
+    return await AuthService.enableTwoFactor(userId, secret, ipAddress, userAgent);
+  }
+
+  static async disableTwoFactor(
+    userId: string,
+    password: string,
+    ipAddress: string,
+    userAgent: string
+  ): Promise<void> {
+    return await AuthService.disableTwoFactor(userId, password, ipAddress, userAgent);
+  }
+
+  static async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    ipAddress: string,
+    userAgent: string
+  ): Promise<void> {
+    return await AuthService.changePassword(userId, currentPassword, newPassword, ipAddress, userAgent);
+  }
+
+  static async getLoginHistory(userId: string): Promise<any[]> {
+    return await SecurityAuditService.getLoginHistory(userId, 20);
   }
 
   static async getProfile(req: Request, res: Response) {

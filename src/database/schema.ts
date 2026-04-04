@@ -349,6 +349,20 @@ export async function initializeTables() {
       )
     `);
 
+    // ZKTeco Attendance logs (raw device punches)
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS attendance_logs (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        \`timestamp\` DATETIME NOT NULL,
+        device_id VARCHAR(100) NOT NULL,
+        UNIQUE KEY uniq_attendance_log (user_id, \`timestamp\`, device_id),
+        INDEX idx_attendance_user_ts (user_id, \`timestamp\`),
+        INDEX idx_attendance_device_ts (device_id, \`timestamp\`),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
     // Notices table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS notices (
