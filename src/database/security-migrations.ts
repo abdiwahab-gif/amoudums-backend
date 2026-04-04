@@ -70,14 +70,23 @@ export async function addSecurityEnhancements() {
       `);
     }
 
-    await connection.execute(`
-      UPDATE users
-      SET status = CASE
-        WHEN isActive = 0 THEN 'inactive'
-        ELSE 'active'
-      END
-      WHERE status IS NULL OR status = ''
-    `);
+    const hasLegacyIsActive = await hasColumn(connection, 'users', 'isActive');
+    if (hasLegacyIsActive) {
+      await connection.execute(`
+        UPDATE users
+        SET status = CASE
+          WHEN isActive = 0 THEN 'inactive'
+          ELSE 'active'
+        END
+        WHERE status IS NULL OR status = ''
+      `);
+    } else {
+      await connection.execute(`
+        UPDATE users
+        SET status = 'active'
+        WHERE status IS NULL OR status = ''
+      `);
+    }
 
     // Add 2FA fields to users table if they don't exist
     await addColumnIfMissing(connection, 'users', 'twoFactorEnabled', 'twoFactorEnabled TINYINT(1) DEFAULT 0');
