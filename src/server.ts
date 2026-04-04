@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { config } from '@/config';
 import { initializeTables } from '@/database/schema';
 import { addSecurityEnhancements } from '@/database/security-migrations';
+import { ensureInitialAdminUser } from '@/database/seed';
 import authRoutes from '@/routes/auth-enhanced.routes';
 import studentRoutes from '@/routes/student.routes';
 import userRoutes from '@/routes/user.routes';
@@ -68,6 +69,16 @@ async function startServer() {
     // Apply security and compatibility migrations for auth/user flows
     console.log('Applying security enhancements...');
     await addSecurityEnhancements();
+
+    // Optional: seed initial admin user (only when env vars are set)
+    try {
+      const seedResult = await ensureInitialAdminUser();
+      if (seedResult.created) {
+        console.log('✓ Seeded initial admin user');
+      }
+    } catch (e: any) {
+      console.warn('⚠ Initial admin seeding skipped/failed:', e?.message || e);
+    }
 
     const listenWithRetry = async (
       startPort: number,

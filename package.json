@@ -11,7 +11,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
-    "migrate": "node dist/scripts/migrate.js"
+    "migrate": "node dist/scripts/migrate.js",
+    "seed": "node dist/scripts/seed.js"
   },
   "keywords": [
     "express",
