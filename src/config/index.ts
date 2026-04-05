@@ -30,7 +30,12 @@ export const config = {
     //   CORS_ORIGIN=http://localhost:3000
     //   CORS_ORIGIN=https://amoudums.vercel.app,http://localhost:3000
     origin: (() => {
-      const raw = (process.env.CORS_ORIGIN || 'http://localhost:3000').trim();
+      const defaultOrigin =
+        (process.env.NODE_ENV || 'development') === 'production'
+          ? 'https://amoudums.vercel.app'
+          : 'http://localhost:3000';
+
+      const raw = (process.env.CORS_ORIGIN || defaultOrigin).trim();
       const origins = raw
         .split(',')
         .map((v) => v.trim())
