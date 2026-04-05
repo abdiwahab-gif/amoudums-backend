@@ -87,29 +87,104 @@ function chunk<T>(items: T[], size: number): T[][] {
   return result;
 }
 
+async function getTableColumns(table: 'hr_employees' | 'teachers' | 'users'): Promise<Set<string>> {
+  try {
+    const rows = await query<any>(`SHOW COLUMNS FROM ${table}`);
+    return new Set((rows || []).map((r: any) => String(r?.Field || '').toLowerCase()).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
 async function resolveUserIdsByPin(pins: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   const uniquePins = Array.from(new Set(pins.map((p) => String(p).trim()).filter(Boolean)));
   if (uniquePins.length === 0) return map;
 
-  const fillFrom = async (table: 'hr_employees' | 'teachers') => {
+  const hrCols = await getTableColumns('hr_employees');
+  const teachersCols = await getTableColumns('teachers');
+
+  // 1) HR employees mapping
+  if (hrCols.size > 0) {
+    const remaining = () => uniquePins.filter((p) => !map.has(p));
+
+    // Case A: table has userId (backend schema)
+    if (hrCols.has('userid')) {
+      const hasEmployeeId = hrCols.has('employeeid');
+      const hasBiometricUserId = hrCols.has('biometricuserid');
+      const pinColumns: string[] = [];
+      if (hasEmployeeId) pinColumns.push('employeeId');
+      if (hasBiometricUserId) pinColumns.push('biometricUserId');
+      if (pinColumns.length === 0) pinColumns.push('employeeId');
+
+      for (const pinChunk of chunk(remaining(), 200)) {
+        const placeholders = pinChunk.map(() => '?').join(',');
+        const where = pinColumns.map((c) => `${c} IN (${placeholders})`).join(' OR ');
+        const params = pinColumns.flatMap(() => pinChunk);
+        const rows = await query<any>(
+          `SELECT employeeId, biometricUserId, userId FROM hr_employees WHERE ${where}`,
+          params
+        );
+        for (const r of rows || []) {
+          const userId = asString(r.userId).trim();
+          const employeeId = asString(r.employeeId).trim();
+          const biometricUserId = asString(r.biometricUserId).trim();
+          if (!userId) continue;
+          if (employeeId && !map.has(employeeId)) map.set(employeeId, userId);
+          if (biometricUserId && !map.has(biometricUserId)) map.set(biometricUserId, userId);
+        }
+      }
+    }
+
+    // Case B: table has email (frontend HR schema); join to users by email to get userId
+    if (!hrCols.has('userid') && hrCols.has('email')) {
+      const hasEmployeeId = hrCols.has('employeeid');
+      const hasBiometricUserId = hrCols.has('biometricuserid');
+      const pinColumns: string[] = [];
+      if (hasEmployeeId) pinColumns.push('employeeId');
+      if (hasBiometricUserId) pinColumns.push('biometricUserId');
+      if (pinColumns.length === 0) pinColumns.push('employeeId');
+
+      for (const pinChunk of chunk(remaining(), 200)) {
+        const placeholders = pinChunk.map(() => '?').join(',');
+        const where = pinColumns.map((c) => `emp.${c} IN (${placeholders})`).join(' OR ');
+        const params = pinColumns.flatMap(() => pinChunk);
+
+        const rows = await query<any>(
+          `SELECT emp.employeeId as employeeId, emp.biometricUserId as biometricUserId, u.id as userId
+           FROM hr_employees emp
+           JOIN users u ON LOWER(u.email) = LOWER(emp.email)
+           WHERE ${where}`,
+          params
+        );
+
+        for (const r of rows || []) {
+          const userId = asString(r.userId).trim();
+          const employeeId = asString(r.employeeId).trim();
+          const biometricUserId = asString(r.biometricUserId).trim();
+          if (!userId) continue;
+          if (employeeId && !map.has(employeeId)) map.set(employeeId, userId);
+          if (biometricUserId && !map.has(biometricUserId)) map.set(biometricUserId, userId);
+        }
+      }
+    }
+  }
+
+  // 2) Teachers mapping (employeeId -> userId)
+  if (teachersCols.size > 0 && teachersCols.has('employeeid') && teachersCols.has('userid')) {
     for (const pinChunk of chunk(uniquePins.filter((p) => !map.has(p)), 200)) {
       const placeholders = pinChunk.map(() => '?').join(',');
-      const rows = await query<{ employeeId: string; userId: string }>(
-        `SELECT employeeId, userId FROM ${table} WHERE employeeId IN (${placeholders})`,
+      const rows = await query<any>(
+        `SELECT employeeId, userId FROM teachers WHERE employeeId IN (${placeholders})`,
         pinChunk
       );
-      for (const r of rows) {
-        const employeeId = asString((r as any).employeeId).trim();
-        const userId = asString((r as any).userId).trim();
+      for (const r of rows || []) {
+        const employeeId = asString(r.employeeId).trim();
+        const userId = asString(r.userId).trim();
         if (employeeId && userId && !map.has(employeeId)) map.set(employeeId, userId);
       }
     }
-  };
-
-  // Prefer HR employees mapping; fallback to teachers.
-  await fillFrom('hr_employees');
-  await fillFrom('teachers');
+  }
 
   return map;
 }
@@ -138,7 +213,51 @@ function annotateCheckInOut(logs: AttendanceLogRow[]): AttendanceLogRow[] {
 
 export class ZktecoController {
   static async getRequest(_req: Request, res: Response): Promise<void> {
-    // Device polls this endpoint; always respond OK.
+    const deviceId = getDeviceId(_req);
+
+    // Device polls this endpoint.
+    // If an admin queued a command (e.g., GET ATTLOG), return it once.
+    try {
+      if (deviceId && deviceId !== 'unknown') {
+        await execute(
+          `CREATE TABLE IF NOT EXISTS zkteco_device_commands (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            device_id VARCHAR(100) NOT NULL,
+            command TEXT NOT NULL,
+            createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            consumedAt TIMESTAMP NULL,
+            INDEX idx_device_created (device_id, createdAt),
+            INDEX idx_device_consumed (device_id, consumedAt)
+          )`,
+          []
+        );
+
+        const rows = await query<any>(
+          `SELECT id, command
+           FROM zkteco_device_commands
+           WHERE device_id = ? AND consumedAt IS NULL
+           ORDER BY createdAt ASC
+           LIMIT 1`,
+          [deviceId]
+        );
+
+        const first = rows?.[0];
+        if (first?.id && first?.command) {
+          await execute(
+            `UPDATE zkteco_device_commands SET consumedAt = NOW() WHERE id = ?`,
+            [first.id]
+          );
+          res.status(200).type('text/plain').send(String(first.command));
+          return;
+        }
+      }
+    } catch (e: any) {
+      console.warn('[ZKTeco] getrequest command lookup failed', {
+        deviceId,
+        message: e?.message,
+      });
+    }
+
     res.status(200).type('text/plain').send('OK');
   }
 
@@ -270,6 +389,55 @@ export class ZktecoController {
       res.status(500).json({
         success: false,
         message: error?.message || 'Failed to fetch attendance logs',
+      });
+    }
+  }
+
+  static async queuePullAttendance(req: Request, res: Response): Promise<void> {
+    const deviceId =
+      asString((req.body as any)?.deviceId).trim() ||
+      asString((req.body as any)?.SN).trim() ||
+      asString((req.query as any)?.deviceId).trim() ||
+      asString((req.query as any)?.SN).trim();
+
+    const command = asString((req.body as any)?.command).trim() || 'GET ATTLOG';
+
+    if (!deviceId) {
+      res.status(400).json({
+        success: false,
+        message: 'deviceId (or SN) is required',
+      });
+      return;
+    }
+
+    try {
+      await execute(
+        `CREATE TABLE IF NOT EXISTS zkteco_device_commands (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          device_id VARCHAR(100) NOT NULL,
+          command TEXT NOT NULL,
+          createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          consumedAt TIMESTAMP NULL,
+          INDEX idx_device_created (device_id, createdAt),
+          INDEX idx_device_consumed (device_id, consumedAt)
+        )`,
+        []
+      );
+
+      await execute(
+        `INSERT INTO zkteco_device_commands (device_id, command) VALUES (?, ?)`,
+        [deviceId, command]
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Command queued. Device will execute on next poll to /iclock/getrequest.',
+        data: { deviceId, command },
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error?.message || 'Failed to queue command',
       });
     }
   }

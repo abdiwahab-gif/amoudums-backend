@@ -18,5 +18,6 @@ deviceRouter.post('/cdata', ZktecoController.postCdata);
 // API routes (for admins/tools). You can add auth middleware here if desired.
 export const zktecoApiRoutes = Router();
 zktecoApiRoutes.get('/attendance-logs', ZktecoController.getAttendanceLogs);
+zktecoApiRoutes.post('/pull-attendance', ZktecoController.queuePullAttendance);
 
 export default deviceRouter;
