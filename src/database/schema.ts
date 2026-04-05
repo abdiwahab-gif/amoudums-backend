@@ -363,6 +363,32 @@ export async function initializeTables() {
       )
     `);
 
+    // ZKTeco device command queue (for iClock pull pattern)
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS zkteco_device_commands (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        device_id VARCHAR(100) NOT NULL,
+        command TEXT NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        consumedAt TIMESTAMP NULL,
+        INDEX idx_device_created (device_id, createdAt),
+        INDEX idx_device_consumed (device_id, consumedAt)
+      )
+    `);
+
+    // ZKTeco raw punches by PIN (stored even when user mapping is not configured)
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS zkteco_punches (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        device_id VARCHAR(100) NOT NULL,
+        pin VARCHAR(50) NOT NULL,
+        \`timestamp\` DATETIME NOT NULL,
+        UNIQUE KEY uniq_punch (device_id, pin, \`timestamp\`),
+        INDEX idx_device_ts (device_id, \`timestamp\`),
+        INDEX idx_pin_ts (pin, \`timestamp\`)
+      )
+    `);
+
     // Notices table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS notices (

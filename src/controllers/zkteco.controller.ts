@@ -281,6 +281,33 @@ export class ZktecoController {
       const pinList = records.map((r) => r.pin);
       const userMap = await resolveUserIdsByPin(pinList);
 
+      // Always store raw punches by PIN so logs are not lost.
+      try {
+        await execute(
+          `CREATE TABLE IF NOT EXISTS zkteco_punches (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            device_id VARCHAR(100) NOT NULL,
+            pin VARCHAR(50) NOT NULL,
+            \`timestamp\` DATETIME NOT NULL,
+            UNIQUE KEY uniq_punch (device_id, pin, \`timestamp\`),
+            INDEX idx_device_ts (device_id, \`timestamp\`),
+            INDEX idx_pin_ts (pin, \`timestamp\`)
+          )`,
+          []
+        );
+
+        for (const batch of chunk(records, 400)) {
+          const placeholders = batch.map(() => '(?, ?, ?)').join(',');
+          const params = batch.flatMap((r) => [deviceId, r.pin, r.dateTime]);
+          await execute(
+            `INSERT IGNORE INTO zkteco_punches (device_id, pin, \`timestamp\`) VALUES ${placeholders}`,
+            params
+          );
+        }
+      } catch (e: any) {
+        console.warn('[ZKTeco] Failed to store raw punches', { deviceId, message: e?.message });
+      }
+
       const uniqueRows = new Map<string, { userId: string; timestamp: string; deviceId: string }>();
       const unknownPins = new Set<string>();
 
