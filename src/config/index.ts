@@ -25,7 +25,19 @@ export const config = {
 
   // CORS
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    // Supports a single origin or a comma-separated allowlist.
+    // Examples:
+    //   CORS_ORIGIN=http://localhost:3000
+    //   CORS_ORIGIN=https://amoudums.vercel.app,http://localhost:3000
+    origin: (() => {
+      const raw = (process.env.CORS_ORIGIN || 'http://localhost:3000').trim();
+      const origins = raw
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+
+      return origins.length <= 1 ? origins[0] : origins;
+    })(),
     credentials: true,
   },
 

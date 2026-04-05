@@ -102,6 +102,8 @@ DB_PASSWORD=strong_password_here
 DB_NAME=academic_db
 JWT_SECRET=your-production-secret-key-minimum-32-chars
 JWT_EXPIRY=7d
+# Frontend origins allowed to call this API (comma-separated allowlist)
+# Example: CORS_ORIGIN=https://amoudums.vercel.app
 CORS_ORIGIN=https://yourdomain.com
 API_URL=https://api.yourdomain.com
 ```
