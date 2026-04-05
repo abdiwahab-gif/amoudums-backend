@@ -30,18 +30,16 @@ export const config = {
     //   CORS_ORIGIN=http://localhost:3000
     //   CORS_ORIGIN=https://amoudums.vercel.app,http://localhost:3000
     origin: (() => {
-      const defaultOrigin =
-        (process.env.NODE_ENV || 'development') === 'production'
-          ? 'https://amoudums.vercel.app'
-          : 'http://localhost:3000';
+      const defaults = ['https://amoudums.vercel.app', 'http://localhost:3000'];
 
-      const raw = (process.env.CORS_ORIGIN || defaultOrigin).trim();
-      const origins = raw
+      const raw = (process.env.CORS_ORIGIN || '').trim();
+      const envOrigins = raw
         .split(',')
         .map((v) => v.trim())
         .filter(Boolean);
 
-      return origins.length <= 1 ? origins[0] : origins;
+      const combined = Array.from(new Set([...envOrigins, ...defaults]));
+      return combined.length <= 1 ? combined[0] : combined;
     })(),
     credentials: true,
   },
